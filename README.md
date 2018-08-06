@@ -1,6 +1,6 @@
 # U2F Lock
 
-This small application provides an easy way to lock and unlock your i3lock session using a FIDO U2F Token (Yubico Security Key, Google Titan Security Key)
+This small application provides an easy way to lock and unlock your i3lock session using a FIDO U2F Token (Yubico Security Key, Google Titan Security Key).
 
 ## Features
 
@@ -31,9 +31,8 @@ Touch your token when being asked.
 Add the following snippet to your lock.sh right after the i3lock call:
 
 ```bash
-U2FLOCK=$HOME/go/bin/u2flock
 U2FLOCKKEY=$HOME/.secret/u2flock-key.json
-$U2FLOCK -key=$U2FLOCKKEY &
+$HOME/go/bin/u2flock -key=$U2FLOCKKEY &
 ```
 
 Now when locking you should be able to connect your Key and press the button to unlock.
