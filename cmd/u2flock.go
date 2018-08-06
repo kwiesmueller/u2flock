@@ -2,14 +2,8 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
-	"fmt"
-	"io/ioutil"
-	"os"
-	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/flynn/hid"
@@ -17,7 +11,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/flynn/u2f/u2fhid"
-	u2flock "github.com/kwiesmueller/u2flock/pkg"
+	"github.com/kwiesmueller/u2flock/pkg/pid"
+	"github.com/kwiesmueller/u2flock/pkg/u2flock"
 	"github.com/seibert-media/golibs/log"
 )
 
@@ -34,84 +29,6 @@ var (
 	debug       = flag.Bool("debug", false, "enable debug logging")
 	keyFilePath = flag.String("key", "/home/kwiesmueller/.secret/u2flock-key.json", "location of the key file for persisting tokens")
 )
-
-var errNoPID = errors.New("no pid file found")
-
-// GetPID for current process
-func GetPID(ctx context.Context) (int, error) {
-	filePath := fmt.Sprintf("%s.pid", app)
-
-	// check for existing instance
-	if _, err := os.Stat(filePath); !os.IsNotExist(err) {
-		// file exists
-
-		file, err := os.Open(filePath)
-		if err != nil {
-			log.From(ctx).Error("opening pidfile", zap.String("path", filePath), zap.Error(err))
-			return 0, err
-		}
-
-		pidBytes, err := ioutil.ReadAll(file)
-		if err != nil {
-			log.From(ctx).Error("reading pidfile", zap.String("path", filePath), zap.Error(err))
-			return 0, err
-		}
-
-		pid, err := strconv.ParseInt(string(pidBytes), 10, 32)
-		if err != nil {
-			log.From(ctx).Error("parsing pid", zap.Error(err))
-			return 0, err
-		}
-
-		return int(pid), nil
-	}
-	return 0, errNoPID
-}
-
-// CreatePID for current process
-func CreatePID(ctx context.Context) (int, error) {
-	filePath := fmt.Sprintf("%s.pid", app)
-
-	log.From(ctx).Debug("creating pid", zap.String("path", filePath))
-
-	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDWR, 0666)
-	if err != nil {
-		log.From(ctx).Error("opening pidfile", zap.String("path", filePath), zap.Error(err))
-		return 0, err
-	}
-
-	pid := os.Getpid()
-	_, err = file.Write([]byte(strconv.Itoa(pid)))
-	if err != nil {
-		log.From(ctx).Error("writing pid", zap.Int("pid", pid), zap.String("path", filePath), zap.Error(err))
-		return pid, err
-	}
-
-	return pid, nil
-}
-
-// CheckPID to determine if a process is active
-func CheckPID(ctx context.Context, pid int) (bool, error) {
-	if pid <= 0 {
-		return false, nil
-	}
-
-	p, err := os.FindProcess(pid)
-	if err != nil {
-		log.From(ctx).Error("searching process", zap.Error(err))
-		return false, err
-	}
-
-	if err := p.Signal(os.Signal(syscall.Signal(0))); err != nil {
-		if err.Error() == "os: process already finished" {
-			return false, nil
-		}
-		log.From(ctx).Error("sending signal", zap.Error(err))
-		return false, err
-	}
-
-	return true, nil
-}
 
 func main() {
 	flag.Parse()
@@ -150,26 +67,26 @@ func main() {
 		go watchDevices(ctx, keyFile, keyFile.Lock(*lockCmd, args...))
 	} else {
 
-		pid, err := GetPID(ctx)
+		PID, err := pid.GetPID(ctx, app)
 		if err != nil {
 			log.From(ctx).Debug("getting pid", zap.Error(err))
 		}
 
-		if pid != 0 {
-			running, err := CheckPID(ctx, pid)
+		if PID != 0 {
+			running, err := pid.CheckPID(ctx, PID)
 			if err != nil {
-				log.From(ctx).Fatal("checking pid", zap.Int("pid", pid), zap.Error(err))
+				log.From(ctx).Fatal("checking pid", zap.Int("pid", PID), zap.Error(err))
 			}
 
 			if running {
-				log.From(ctx).Error("exiting", zap.String("reason", "already running"), zap.Int("pid", pid))
+				log.From(ctx).Error("exiting", zap.String("reason", "already running"), zap.Int("pid", PID))
 				return
 			}
 		}
 
-		pid, err = CreatePID(ctx)
+		PID, err = pid.CreatePID(ctx, app)
 		if err != nil {
-			log.From(ctx).Fatal("checking pid", zap.Int("pid", pid), zap.Error(err))
+			log.From(ctx).Fatal("checking pid", zap.Int("pid", PID), zap.Error(err))
 		}
 
 		go watchDevices(ctx, keyFile, keyFile.Authenticate)
