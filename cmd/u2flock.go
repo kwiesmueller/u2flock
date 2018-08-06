@@ -151,9 +151,11 @@ func main() {
 	} else {
 
 		pid, err := GetPID(ctx)
-		if err != nil || pid == 0 {
+		if err != nil {
 			log.From(ctx).Debug("getting pid", zap.Error(err))
-		} else {
+		}
+
+		if pid != 0 {
 			running, err := CheckPID(ctx, pid)
 			if err != nil {
 				log.From(ctx).Fatal("checking pid", zap.Int("pid", pid), zap.Error(err))
@@ -163,11 +165,11 @@ func main() {
 				log.From(ctx).Error("exiting", zap.String("reason", "already running"), zap.Int("pid", pid))
 				return
 			}
+		}
 
-			pid, err = CreatePID(ctx)
-			if err != nil {
-				log.From(ctx).Fatal("checking pid", zap.Int("pid", pid), zap.Error(err))
-			}
+		pid, err = CreatePID(ctx)
+		if err != nil {
+			log.From(ctx).Fatal("checking pid", zap.Int("pid", pid), zap.Error(err))
 		}
 
 		go watchDevices(ctx, keyFile, keyFile.Authenticate)
