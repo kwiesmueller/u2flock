@@ -107,6 +107,7 @@ func watchDevices(
 		devices, err := u2fhid.Devices()
 		if err != nil {
 			log.From(ctx).Error("searching devices", zap.Error(err))
+			time.Sleep(time.Second * 1)
 			continue
 		}
 
